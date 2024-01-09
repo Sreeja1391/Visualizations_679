@@ -1,0 +1,599 @@
+---
+title: STAT 679 Problem Set 4
+author: "Sreeja Kodati"
+date: "`r Sys.Date()`"
+output: rmdformats::readthedown
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, cache = FALSE)
+```
+
+# Political Book Recommendations
+
+**In this problem, we’ll study a network dataset of Amazon bestselling US Politics books. Books are linked by an edge if they appeared together in the recommendations (“customers who bought this book also bought these other books”).**
+```{r}
+library(readr)
+edge_data_path <- "https://raw.githubusercontent.com/krisrs1128/stat992_f23/6c4130bddbdfc9ef90537c794cdca47773643752/activities/week10/political-books-edges.csv"
+node_data_path <- "https://github.com/krisrs1128/stat992_f23/raw/6c4130bddbdfc9ef90537c794cdca47773643752/activities/week10/political-books-nodes.csv"
+edges <- read_csv(edge_data_path, col_types = "cci")
+nodes <- read_csv(node_data_path, col_types = "ccc")
+```
+
+## Part a
+**The code below reads in the edges and nodes associated with the network. The edges data set only contains IDs of co-recommended books, while the nodes data includes attributes associated with each book. Build a tbl_graph object to store the graph.**
+```{r}
+library(tidygraph)
+tbl_graph <- tbl_graph(edges = edges, nodes = nodes)
+```
+
+## Part b
+**Use the result from part (a) to visualize the network as a node-link diagram. Include the books titles in the node label, and shade in the node according to political ideology.**
+```{r warning=FALSE, fig.width=15, fig.height=20}
+library(tidygraph)
+library(ggraph)
+
+node_attributes <- tbl_graph %>%
+  activate(nodes) %>%
+  as_tibble() %>%
+  mutate(political_ideology = as.factor(political_ideology))  
+
+ggraph(tbl_graph, layout = "kk") +
+  geom_edge_link(width=0.05) +
+  geom_node_point(aes(col = political_ideology), size = 5) +
+  geom_node_label(aes(label = label), repel = TRUE) +
+  scale_color_manual(values = c("#fc8d59","#ffffbf","#91bfdb"), 
+                     breaks = levels(node_attributes$political_ideology)) +
+  ggtitle("Node-Link diagram for Amazon Bestselling US Politics books") +
+  labs(color = "Political Ideology")+
+  theme(legend.position = "bottom", plot.title = element_text(hjust = 0.5, size =30))
+```
+
+## Part c
+**Create the analogous adjacency matrix visualization. Provide examples of visual queries that are easy to answer using one encoding but not the other (i.e., what is easy to see in the node-link view vs. what is easy to see in the adjacency matrix).**
+```{r, fig.width=10, fig.height=10}
+
+ggraph(tbl_graph, layout = "matrix") +
+  geom_edge_tile() +
+  coord_fixed() +
+  geom_node_text(aes(label = id, col=political_ideology), x = -1, nudge_y = 0.5, size=2, hjust=1) +
+  geom_node_text(aes(label = id, col=political_ideology), y = -1, nudge_x = -0.5, angle=90, size=2, hjust = 1)+
+  ggtitle("Adjacency matrix visualization")+
+  labs(col = "Political Ideology",fill = "political_ideology")+
+  guides(fill = FALSE)+
+  theme(legend.position = "bottom", plot.title = element_text(hjust = 0.5, size =20), plot.margin = unit(c(1, 1.5, 1, 1), "lines"))
+```
+
+Examples of visual queries that are better suited for one encoding over the other:
+
+Node-Link Diagram:
+- How many other books is a specific book connected to?  Which books form tight-knit groups in the network?
+- The clusters of communities are visually apparent as groups of nodes.
+
+Adjacency Matrix:
+- Are there books that are not recommended alongside any other book in the data set?
+- Books with no connections can be easily identified by rows or columns with all zeroes in the matrix.
+
+# Topics in Pride and Prejudice
+**This problem uses LDA to analyze the full text of Pride and Prejudice. The object paragraph is a data.frame whose rows are paragraphs from the book. We have filtered very short paragraphs; e.g., from dialogue. We are interested in how the topics appearing in the book vary from the start to the end of the book, for example.**
+```{r}
+paragraphs <- read_csv("https://uwmadison.box.com/shared/static/pz1lz301ufhbedzsj9iioee77r95xz4v.csv")
+```
+
+## Part a
+**Create a Document-Term Matrix containing word counts from across the same paragraphs. That is, the i-th row of dtm should correspond to the i-th row of paragraph. Make sure to remove all stop-words.**
+```{r}
+library(dplyr)
+library(tidytext)
+library(tidyverse)
+
+by_paragraph <- paragraphs |>
+  unite(document, paragraph)
+
+word_counts <- by_paragraph |>
+  unnest_tokens(word, text) |>
+  anti_join(stop_words) |>
+  count(document, word) |>
+  arrange(desc(n))
+
+dtm <- word_counts |>
+  cast_dtm(document, word, n)
+```
+
+## Part b
+**Fit an LDA model to dtm using 6 topics. Set the seed by using the argument control = list(seed=479) to remove any randomness in the result.**
+```{r}
+library(topicmodels)
+set.seed(479)
+
+lda <- LDA(dtm, k = 6, control = list(seed = 479))
+
+```
+
+## Part c
+**Visualize the top 30 words within each of the fitted topics. Specifically, create a faceted bar chart where the lengths of the bars correspond to word probabilities and the facets correspond to topics. Reorder the bars so that each topic’s top words are displayed in order of decreasing probability.**
+```{r, fig.width=10, fig.height=12}
+tidy_lda <- tidy(lda, matrix = "beta")
+
+top_words <- tidy_lda |>
+  group_by(topic) |>
+  top_n(30, beta) |>
+  arrange(topic, -beta)
+
+custom_colors <- c("#e41a1c", "#377eb8", "#4daf4a", "#984ea3","#ff7f00", "#a65628")
+
+ggplot(top_words, aes(x = reorder(term, -beta), y = beta, fill = factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~topic, scales = "free_y", ncol = 2) +
+  coord_flip() +
+  scale_fill_manual(values = custom_colors) + 
+  labs(x = "Word", y = "Probability of words")+
+  ggtitle("Top 30 words in each topic")+
+  theme(panel.background = element_blank(), plot.title = element_text(hjust = 0.5, size =20), plot.margin = unit(c(1, 1.5, 1, 1), "lines"))
+```
+
+## Part d
+**Find the paragraph that is the purest representative of Topic 2. That is, if γik denotes the weight of topic k in paragraph i, then print out paragraph i∗ where i∗ = argmaxiγi2. Verify that the at least a few of the words with high probability for this topic appear. Only copy the first sentence into your solution.**
+```{r}
+memberships <- tidy(lda, matrix = "gamma")
+
+topic2_members <- memberships |> filter(topic==2)
+
+pure_topic2_document <- (topic2_members |> arrange(-gamma) |> pull(document))[1]
+
+pure_topic2_paragrpah_text <- by_paragraph |> filter(document == pure_topic2_document) |> pull(text)
+
+cat("Purest Representative of Topic 2:", pure_topic2_document)
+```
+```{r}
+cat(str_extract(pure_topic2_paragrpah_text, "^[^.!?]*[.!?]"))
+```
+# Food Nutrients
+**This problem will use PCA to provide a low-dimensional view of a 14-dimensional nutritional facts data set. The data were originally curated by the USDA and are regularly used in visualization studies.**
+```{r}
+nutrients <- read_csv("https://uwmadison.box.com/shared/static/nmgouzobq5367aex45pnbzgkhm7sur63.csv")
+```
+
+## Part a
+**Define a tidymodels recipe that normalizes all nutrient features and specifies that PCA should be performed.**
+```{r}
+library(tidymodels)
+
+nutrients <- select(nutrients, -id, -group_lumped)
+
+nutrient_recipe <- recipe(~ ., data = nutrients) |>
+  update_role(name:group, new_role = "id") |>
+  step_normalize(all_numeric()) |>
+  step_pca(all_numeric())   
+```
+
+## Part b
+**Visualize the top 6 principal components. What types of food do you expect to have low or high values for PC1 or PC2?**
+```{r, fig.width=10, fig.height=5}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(glue)
+library(viridis)
+
+nutrient_recipe <- prep(nutrient_recipe)
+
+components <- tidy(nutrient_recipe, 2) |>
+  filter(component %in% glue("PC{1:6}"))
+
+ggplot(components, aes(x = value, y = terms, fill = value)) +
+  geom_col() +
+  facet_wrap(~ component, scales = "free_y") +
+  scale_fill_viridis_c() +
+  labs(
+    title = "Top 6 Principal Components of Food Nutrients",
+    x = "Component Value",
+    y = "Terms"
+  ) +
+  theme_get()+
+  theme(panel.background = element_blank(), plot.title = element_text(hjust = 0.5, size =20), plot.margin = unit(c(1, 1.5, 1, 1), "lines"))
+```
+
+## Part c
+**Compute the average value of PC2 within each category of the group column. Give the names of the groups sorted by this average.**
+```{r}
+library(dplyr)
+
+sample_scores<- bake(nutrient_recipe, NULL)
+
+group_names <- sample_scores|>
+  group_by(group) |>
+  summarize(avg_PC2 = mean(PC2)) |>
+  arrange(desc(avg_PC2)) |>
+  pull(group)
+
+print(group_names)
+```
+
+## Part d
+**Visualize the scores of each food item with respect to the first two principal components. Facet the visualization according to the group column, and sort the facets according to the results of part (c). How does the result compare with your guess from part (b)?**
+```{r, fig.width=10, fig.height=10}
+library(viridis)
+
+ggplot(sample_scores, aes(x=PC1, y=PC2, color=group)) +
+  geom_point(alpha = 0.7, size = 0.8) +
+  facet_wrap(~factor(group)) +
+  labs(
+    title = "Scores of Each Food Item with Respect to PC1 and PC2",
+    x = "PC1",
+    y = "PC2"
+  ) +
+  scale_color_viridis(discrete = TRUE) + 
+  theme_bw()+
+  guides(color = FALSE)+
+  theme(panel.background = element_blank(), plot.title = element_text(hjust = 0.5, size =20), plot.margin = unit(c(1, 1.5, 1, 1), "lines"))
+```
+
+# Interactive Phylogeny
+**We will build an interactive phylogenetic tree of SARS−CoV−2 genetic sequences. Each sequence has been annotated with a date and location of its discovery. We will use D3 to allow readers to explore the way genetic changes unfold over time and space. You can find the raw data here: nodes, edges. We have provided starter code to build a d3.stratify() object from the edge data and to define an object, node_lookup, which can be used to look up the country and date associated with the from and to fields in the edges.**
+
+## Part a
+**Create a static tree visualization that shows how the different COVID variants evolved from one another. Use color to encode the location of the variant’s discovery. You may group rare countries into “Other,” and draw variants with unknown origins using either white or grey.**
+
+## Part b
+**Implement one of the following forms of interactivity: Blend the rest of the nodes into the background.**
+
+**Code for both a and b**
+
+The live server is not working on my text editor (VSCode) and I had to discuss this question with my group to finish it.
+```{html eval=FALSE}
+<!DOCTYPE html>
+<html>
+  <head>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://d3js.org/d3-selection-multi.v1.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.slim.min.js"></script>
+    <link rel="stylesheet" href="phylo.css">
+  </head>
+  <body>
+    <!-- <select id="country_select" multiple/>
+      <option>China</option>
+      <option>UnitedStates</option>
+      <option>Netherlands</option>
+      <option>Australia</option>
+      <option>UnitedKingdom</option>
+      <option>Singapore</option>
+      <option>Switzerland</option>
+      <option>Korea</option>
+      <option>Japan</option>
+    </select> -->
+    <svg height=500 width=900>
+      <g id ="tree"/>
+      <g id="labels">
+        <text/>
+      </g>
+    </svg>
+    <div class="toggle-container">
+      <label class="switch">
+        <input type="checkbox" id="toggleSwitch" onchange="toggleInteractivity(this)">
+        <span class="slider"></span>
+      </label>
+      <span class="toggle-label">Toggle interactive mode</span>
+    </div>
+  </body>
+  <script src="phylo.js"></script>
+</html>
+```
+
+```{css eval=FALSE}
+body {
+  background: #fcfcfc;
+  font-family: "sans-serif";
+  font-size: 20px;
+}
+
+#tree {
+  transform: translate(10px, 20px);
+}
+
+#tree path {
+  fill: none;
+  stroke: #333333;
+}
+
+#legend circle {
+  r: 6;
+  cx: 10;
+  cy: 11;
+  filter: blur(0.5pt);
+}
+
+#legend text {
+  transform: translate(1.5rem, 1rem);
+}
+
+.toggle-container {
+  display: flex;
+  align-items: center;
+  margin: -7.5% 0% 0% 5%;
+}
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 20px;
+  margin-right: 10px; 
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: 0.4s;
+  border-radius: 20px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 2px;
+  bottom: 2px;
+  background-color: white;
+  transition: 0.4s;
+  border-radius: 50%;
+}
+
+input:checked + .slider {
+  background-color: #70b15a;
+}
+
+input:focus + .slider {
+  box-shadow: 0 0 1px #70b15a;
+}
+
+input:checked + .slider:before {
+  transform: translateX(20px);
+}
+
+.slider:before {
+  transform: translateX(0);
+}
+```
+
+```{js eval=FALSE}
+var node_countries;
+
+function make_tree(edges) {
+  edges.push({to: 1, from: null})
+  stratifier = d3.stratify()
+    .id(d => d.to)
+    .parentId(d => d.from)
+
+  tree_gen = d3.tree()
+    .size([900, 450])
+  let root = stratifier(edges)
+  return tree_gen(root)
+}
+
+function visualize(nodes, edges) {
+  node_countries = nodes.map(d => d.country);  
+
+  country_colour = assign_colours(node_countries)
+
+  tree = make_tree(edges)
+  
+  let link_gen = d3.linkVertical()
+    .x(d => d.x)
+    .y(d => d.y)
+  d3.select("#tree")
+    .selectAll("path")
+    .data(tree.links()).enter()
+    .append("path")
+    .attrs({
+      d: link_gen,
+      "stroke-width": 0.8
+    })
+
+  d3.select("#tree")
+    .selectAll("circle")
+    .data(tree.descendants()).enter()
+    .append("circle")
+    .attrs({
+      cx: d => d.x,
+      cy: d => d.y,
+      fill: d => d.depth==0 ? "#000" : country_colour[nodes[d.id-1].country],
+      r: 4,
+      opacity: .8,
+    })
+    
+  let legend_data = Object.keys(country_colour).slice(1,6)
+  legend_data.push("Others (hover to see)")
+  
+  legend_items = d3.select("#legend")
+    .selectAll(".legend-item")
+    .data(legend_data)
+    .enter().append("g")
+    .attrs({
+      class: ".legend-item",
+      transform: (d, i) => `translate(0, ${i*20})`,
+    })
+
+  legend_items
+    .append("circle")
+    .attrs({
+      fill: (d, i) => Object.values(country_colour).slice(1,7)[i],
+    })
+
+  legend_items
+    .append("text")
+    .text(d => d);
+}
+
+function get_ids(node) {
+  descendant_ids = node.descendants().map(d => d.id)
+  ancestor_ids = node.ancestors().map(d => d.id)
+  return ancestor_ids.concat(descendant_ids)
+}
+
+function get_highlight_level(curr_index, selected_index, id, focused) {
+  let highlight_level = (curr_index==selected_index ? 1 : (focused.indexOf(id) == -1) ? -1 : 0)
+  return highlight_level + 2
+}
+
+function update_labels(ev, neighborhoods, tree, nodes) {
+  let pos = d3.pointer(ev),
+    selected_index = neighborhoods.find(pos[0], pos[1]),
+    selected_node = tree.descendants()[selected_index],
+    focused = get_ids(selected_node)
+
+  d3.select("#tree")
+    .selectAll("circle")
+    .transition(50)
+    .ease(d3.easeLinear)
+    .attrs({
+      r: (curr_node, curr_index) => {
+        let highlight_level = get_highlight_level(curr_index, selected_index, curr_node.id, focused)
+        return (highlight_level)*4
+      },
+      opacity: (curr_node, curr_index) => {
+        let highlight_level = get_highlight_level(curr_index, selected_index, curr_node.id, focused)
+        return .3*(highlight_level)
+      }
+    })
+
+  d3.select("#tree")
+    .selectAll("path")
+    .transition(100)
+    .ease(d3.easeLinear)
+    .attr("stroke-width", d => focused.indexOf(d.target.id) == -1 ? 0.2 : 1.5)
+
+  d3.select("#labels")
+    .selectAll("text")
+    .transition(50)
+    .ease(d3.easeLinear)
+    .text(node_countries[selected_node.id-1]=='NA' ? "" : node_countries[selected_node.id-1])
+    .attr("transform", `translate(${selected_node.x}, ${selected_node.y})`)
+}
+
+function assign_colours(all_countries_list) {
+  let countries_frequencyTable = {};
+  all_countries_list.forEach((country) => {
+      countries_frequencyTable[country] = (countries_frequencyTable[country] || 0) + 1;
+  });
+  let countries = Object.keys(countries_frequencyTable).sort((a, b) => countries_frequencyTable[b] - countries_frequencyTable[a]);
+  colors = ["none","#feda75","#fa7e1e","#d62976","#962fbf","#4f5bd5","#777"]
+  let country_color = {}
+  for (i=0; i<countries.length ; i++) {
+    country_color[countries[i]] = (i<colors.length-1) ? colors[i] : colors[colors.length-1]
+  }
+  return country_color
+}
+
+function reset_viz() {
+  d3.select("#tree")
+    .selectAll("path")
+    .attrs({
+      "stroke-width": 0.8
+    })
+
+  d3.select("#tree")
+    .selectAll("circle")
+    .attrs({
+      r: 4,
+      opacity: .8,
+    })
+
+  d3.select("#labels")
+    .selectAll("text")
+    .text("")
+}
+
+function toggleInteractivity(toggleSwitch) {
+  if(toggleSwitch.checked) {
+    let neighborhoods = d3.Delaunay.from(tree.descendants().map(d => [d.x, d.y]))
+    d3.select("svg").on("mousemove", (ev) => update_labels(ev, neighborhoods, tree, node_countries))
+  }
+  else {
+    d3.select("svg").on("mousemove",() => {})
+    reset_viz()
+  }
+}
+
+
+Promise.all([
+  d3.csv("../data/covid-nodes.csv", d3.autoType),
+  d3.csv("../data/covid-edges.csv", d3.autoType)
+]).then(([nodes, edges])=> {
+  visualize(nodes, edges)
+})
+```
+
+## Part c
+**Propose, but do not implement, an extend version of part (b) that is linked with an additional table or visualization.**
+
+Interactive Table: Having a visualization that provides detailed information about the node would be nice whenever a node is selected. This feature can give more context to the tree.
+
+**How would the second graphic be updated in response to user interactions?**
+
+Clicking on a node could update the corresponding entry in the table, providing more additional details like date, country, genetic information etc.
+
+**What additional queries become possible in your proposed visualization**
+
+Users can explore the evolution of the variants by sorting the table based on date to observed changes in the tree.
+
+# Hierarchical Edge Bundling
+**In this problem, we will study a D3 hierarchical edge bundling implementation available at this link. The display shows how different files in a software package import from one another. Unlike a naive radial node-link layout, this layout “bundles” together edges if their source and target nodes have common ancestors in the package’s directory tree (which is why the resulting layout is called a “Hierarchical Edge Bundling”).?**
+
+## Part a
+**Use console.log() to inspect the root object. Describe its structure.**
+
+Typically the root object represents the root of the tree structure and contains information about the nodes and edges.The root here is a JSON objects with two items. One is the name attribute flare and the second item contains the children of this node. It is an array of 10 JSON objects.
+
+
+## Part b
+**What does this line do? .attr("d", ([i, o]) => line(i.path(o)))**
+
+This line sets the attribute of an SVG path element using the 'line' function with the result of 'i.path(o)'. Here 'i' and 'o' seem to represent the data points and line is a function that generates a path string for SVG.
+
+
+## Part c
+**Imagine that you are working for a biotechnology firm that is interested in visualizing a protein network. You have data on the co-occurrence frequency for all pairs of proteins (high-co-occurrence can be interpreted as the proteins lying on a shared regulatory pathway). What, if any, additional information would you need before you could implement a hierarchical edge bundling visualization of the network? Explain your reasoning.**
+
+To implement a hierarchical edge bundling visualization of a protein network based on co-occurrence frequency, I would need additional information.
+- I would need node and edge data that representing the proteins and their co-occurrence frequencies. 
+- Hierarchical structure information is needed. This could be based on some classification or some grouping that defines the hierarchy.
+- Attributes representing the nodes and edges like names, types is crucial.
+
+# Interpreting UMAP
+**Imagine that you are a statistical consultant working with a scientist / sports team / journalist / sales division head (pick your favorite or make up your own example). At one point in your study, you found it useful to apply nonlinear dimensionality reduction with UMAP. In this problem, you are asked to provide a non-technical explanation of how to interpret the dimensionality reduction output, assuming that your audience is familiar with their data but not statistical methodology.**
+
+## Part a
+**You have run UMAP on the data set, which includes 50 different measurements for each row. You plot the first two dimensions as a scatter-plot. Explain to your audience what the embedding represents.**
+
+Explaining UMAP in a non-technical way.
+- The data set is a collection of data points, each point representing 50 measurements for each point. Now when you run a UMAP and create a scatter plot with the first two dimensions, imagine this map where each point represents one of those combinations.
+
+Interpreting:
+- Points that are close together on the map are similar to each other in terms of 50 measurements that are considered. It simply means that they have a lot in common.
+- Similarly, points that are distant are more dissimilar in terms of the 50 measurements considered.
+- Clusters or groups on the map suggest that the items within those are more alike in some way compared to items in other clusters.
+
+This map helps us understand the relationships and similarities between things that were measured, making it easier fo us to spot any patterns.
+
+
+## Part b
+**Though they have not heard of UMAP, your audience has previously encountered principal components analysis for dimensionality reduction. Help your audience understand UMAP by comparing and contrasting it with PCA.**
+
+Comparing UMAP with PCA
+- PCA treats data points as arrows in high dimensional space. It tries to find the directions (principal components) where data varies the most. Simply put, its like turning and looking at the data from the best angles to capture the most information.
+- UMAP is more like making a map of your data. Instead of finding the best directions like PCA, it lays out the data on a 2D map where distances roughly correspond to the similarities in the high dimensional space.
+
+Both UMAP and PCA help us simplify complex data.

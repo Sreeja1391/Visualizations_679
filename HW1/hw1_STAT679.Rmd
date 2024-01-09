@@ -1,0 +1,537 @@
+---
+title: "hw1_679"
+author: "Sreeja Kodati"
+date: "2023-10-02"
+output:
+  pdf_document:
+    latex_engine: xelatex
+encoding: UTF-8]
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+**CODING:**
+
+
+
+**Question1: [Coffee Ratings]**
+
+```{r}
+coffee_rating <- read.csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-07-07/coffee_ratings.csv")
+```
+
+a) Clean the harvest_year column. Specifically, if a year of the form 20XX appears in the name, keep it in a new column. For example, 23 July 2010 and Abril -Julio/2011 should be converted into 2010 and 2011, respectively. Remove years that appear less than 10 times.
+
+```{r}
+coffee_rating$harvest_year <- gsub(".*([0-9]{4}).*", "\\1", coffee_rating$harvest_year)
+
+year_counts <- table(coffee_rating$harvest_year)
+
+valid_years <- names(year_counts[year_counts >= 10])
+
+coffee_rating <- coffee_rating[coffee_rating$harvest_year %in% valid_years, ]
+
+```
+
+b) Create a layered visualization of aroma against the year variable defined in (a).
+
+```{r}
+library(ggplot2)
+ggplot(coffee_rating, aes(x = as.factor(harvest_year), y = aroma)) +
+  geom_boxplot(fill = "lightblue", color = "blue", alpha = 0.7) +
+  geom_hline(yintercept = median(coffee_rating$aroma), color = "red", linetype = "dashed") +
+  labs(
+    x = "Year",
+    y = "Aroma",
+    title = "Aroma Distribution by Year"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        plot.title = element_text(hjust = 0.5)) +
+  expand_limits(y = c(0, max(coffee_rating$aroma) + 1))
+
+```
+
+c) Develop a new question related to these data. Make sure that it refers to 3 or more variables.Provide a visualization that answers your question.
+
+*Question:*
+What is the relationship between the color of coffee beans, the country of origin, and the harvest year?
+
+```{r}
+library(ggplot2)
+
+ggplot(coffee_rating, aes(x = country_of_origin, y = color, color = as.factor(harvest_year))) +
+  geom_point(size = 3) +
+  labs(
+    x = "Country of Origin",
+    y = "Color",
+    color = "Year"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        plot.title = element_text(hjust = 0.5))
+
+```
+
+d)Study a public analysis of any public dataset. For example, you can skim David Robinson’s screencast or Benjamin Smith’s blog about the coffee data discussed in this problem, or you could watch one of Julia Silge’s screencast or read one of Danielle Navarro’s blog posts on any data analysis. You can also choose your own public data analysis. Comment on either (i) one code technique you learned from the example or (ii) the visual design of one figures.
+
+![Plot from the blog](coffee_plot.png)
+
+
+
+*Code Technique:*
+- The code uses 'lubridate' for specifically converting dates in the 'grading_date' column to date objects and extracting the year into a new column ('score_year').
+- This simplifies data extraction, making it more efficient.
+
+*Visual Design of the figure:*
+- Theme: Used "theme_fivethirtyeight()" gives the plot a clean look.
+- Labeling: The labels on data points include the year, country of origin, and maximum points.This provides more context to the data points.
+
+
+
+
+**Question2: [NCAA Trends]**
+
+```{r}
+ncaa <- read.csv("https://raw.githubusercontent.com/krisrs1128/stat992_f23/main/exercises/ps1/ncaa_filtered.csv")
+```
+
+a) Derive new columns representing (i) the cumulative total number of points over time for each school (ii) the cumulative total number of points over time for a hypothetical team that earns 35 points a year.
+
+```{r}
+
+ncaa <- ncaa[order(ncaa$school, ncaa$year), ]
+
+unique_schools <- unique(ncaa$school)
+
+ncaa$cumulative_points_school <- 0
+
+for (school in unique_schools) {
+  school_rows <- ncaa$school == school
+  ncaa$cumulative_points_school[school_rows] <- cumsum(ncaa$points[school_rows])
+}
+
+ncaa$cumulative_points_hypothetical <- cumsum(rep(35, nrow(ncaa)))
+
+#head(ncaa)
+
+```
+
+b) Create a visualization that shows the running total number of points for each school over time. If you use faceting, ensure that facets are sorted in an informative way.
+
+```{r}
+ggplot(ncaa, aes(x = year, y = school, fill = points)) +
+  geom_tile() +
+  labs(x = "Year", y = "School", fill = "Points",
+       title = "Total number of points for each school over time") +
+  theme_light() +
+   theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        plot.title = element_text(hjust = 0.5))+
+   scale_fill_viridis_c(option = "viridis")
+  
+```
+
+
+
+c) Design a visualization that that compares each school’s performance with that of the hypothetical team that averages 35 points per year. See the figure below for an example approach. Explain the strengths and weaknesses of your design and comment on a finding from your visualization.
+
+```{r}
+
+library(ggplot2)
+
+ggplot(ncaa, aes(x = school, y = points)) +
+  geom_point(aes(color = year), size = 3) +
+  geom_hline(yintercept = 35, linetype = "dashed", color = "red", linewidth = 1) + 
+  labs(x = "School", y = "Points", color = "Year",
+       title = "Comparison of School Performance with Hypothetical Team") +
+  theme_light() +
+   theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        plot.title = element_text(hjust = 0.5),
+        legend.box = "horizontal")
+```
+
+
+
+*Strengths:*
+- The horizontal red dashed line acts as a reference point, making it easier to assess each school's performance over the years.
+- Color-coded data points makes it easy to identify and distinguish different schools.
+
+*Weaknesses:*
+-Overlapping points in this case can make it difficult to read individual data points.
+- The current plot is static and there is no interactivity. Adding the interactive elements might improve the visualization.
+
+*Comments on potential finding:*
+- From the visualization, one can see that some schools are performing consistently above or below the threshold indicated by the red dashed line at 'y=35'.
+
+
+
+d) Note that the original data includes 250+ schools. Propose, but do not implement, a visualization of the full data set that makes use of dynamic queries. What questions would the visualization answer? What would be the structure of interaction, and how would the display update when the user provides a cue?
+
+*Interactive Dashboard*
+- Having a drop down or a search bar for filtering the data points by school.
+- A line chart can be used to display the cumulative total points over time for a selected school.
+- Dynamic queries: Filtering by school, data control elements for setting a custom hypothetical team score or adding having check boxes to select more than one school for comparison.
+  
+*Questions that could be answered with an interactive dashboard:*
+- Are there trends in performance for different schools or regions?
+- How has the performance of a specific school changed over time? Consistent or inconsistent?
+
+*Strengths:*
+- Interactive dashboard will give us a detailed overview of individual school performance over time.
+- Makes it easier to interpret the results for further analysis.
+
+*Weaknesses:*
+- The dashboard may become more complex as the number of schools increase.
+- Not suitable if users are looking for a quick overview.
+
+
+
+**Question3: [Poisson Guidance]**
+
+a) Provide code implementing the figure that the student is interested in.
+
+```{r, message=FALSE, warning=FALSE}
+library(ggplot2)
+
+mylambda1 <- function(x) dpois(x, lambda = 2)
+mylambda2 <- function(x) dpois(x, lambda = 4)
+mylambda3 <- function(x) dpois(x, lambda = 16)
+
+ranges1 <- data.frame(x = 0:25, PMF = factor(1))
+ranges2 <- data.frame(x = 0:25, PMF = factor(2))
+ranges3 <- data.frame(x = 0:25, PMF = factor(3))
+
+ggplot() +
+  geom_bar(data = ranges1, aes(x = x, y = mylambda1(x), fill = "2"), stat = "identity", linewidth = 1.5, alpha = 0.8) +
+  geom_bar(data = ranges2, aes(x = x, y = mylambda2(x), fill = "4"), stat = "identity", linewidth = 1.5, alpha = 0.8) +
+  geom_bar(data = ranges3, aes(x = x, y = mylambda3(x), fill = "16"), stat = "identity", linewidth = 1.5, alpha = 0.8) +
+  theme_bw(base_size = 14) +
+  labs(x = "x", y = "Poisson Density") +
+  scale_fill_manual(expression(lambda), guide = "legend",
+                    values = c("2" = "seagreen3", "4" = "lightsalmon", "16" = "slategray3")) +
+  xlim(0, 25)
+
+```
+
+
+b) From the attempted solution, what conceptual difficulties do you think the student encountered?
+
+*Problems:*
+
+- Student has defined three separate data frames ranges1, ranges2, and range3 to specify the x-values for lambda 2, 4, and 16. It's more efficient to use a single data frame with all the data points.
+
+- The student is trying to plot functions mylambda1, mylambda2, and mylambda3 with data frames ranges1, ranges2, and range3, respectively. These data frames don't match the functions written for plotting. 
+
+- Adding geom_bar() at the end without specifying any data or aesthetics. This would add an empty bar plot, which is unrelated to your Poisson distribution functions.
+
+- The scale_colour_manual function is used to map colors to labels, but the labels provided are numerical values (e.g., "2", "4", "16"), and the values provided for colors ("red," "green," etc.) and are not mapped correctly to the labels. 
+
+c) How might you have helped the student resolve the challenges evident in part(b)? Briefly explain at least one concept that would improve their knowledge of either ggplot2 or effective code style.
+
+*Changes made for implementing:*
+- Defined consistent data frames for specifying the x-axis range (0 to 25) for each lambda value (λ = 2, λ = 4, λ = 16).
+
+- Mapping of colors to aesthetics is done and then used scale_fill_manual to set the legend.
+
+- Alpha aesthetic: I added the "alpha" aesthetic to each bar to get the transparent preference that the student wanted.
+
+*Some suggestions and concepts that would be beneficial:*
+
+- Instead of creating separate data frames for each lambda value (ranges1, ranges2, range3), the student should consider creating a single data frame that contains all the necessary data for plotting. This would make the code more concise, easier to maintain, and follow the principles of tidy data. This way, they can use ggplot2 to map the aesthetics directly to columns in the data frame.
+
+- The student could benefit from understanding the use of functions in ggplot2. Instead of specifying stat_function for each lambda individually, they could create a function that generates the necessary ggplot code based on a list of lambda values. This would make the code more efficient and modular.
+
+- When mapping aesthetics in ggplot2, it's important to maintain consistency. In the original code, the labels in the legend and the color values were not consistent. Teaching the student to maintain consistency in aesthetics mapping helps in creating clear and understandable visualizations.
+
+
+
+**Question4: [Visual Redesign]**
+
+a) Identify one of your past visualizations for which you still have data. Include a screenshot of this past visualization.
+
+The past visualization is a scatter plot, showing the relationship between "Number of bags" and "Country of origin" of coffee, with data points colored by "Year". I choose this visualization cause I did not find any other visualizations worth changing in my previous analysis. I saw this as an opportunity to improve this visualization I initially created for question2.
+
+![Multi color line graph](scatter_plot.png)
+b) Comment on the main takeaways from the visualization and the graphical relationships that lead to that conclusion. Is this takeaway consistent with the intended message? Are there important comparisons that you would like to highlight, but which are harder to make in the current design?
+
+*Main takeaways:*
+  - The visualization is providing an overview of how the number of bags of coffee varies by country of origin over years.
+  - The main takeaway might be insights into which countries consistently produce larger quantities of coffee and how this changes over time.
+  - It is intended to observe how coffee production is consistent or inconsistent over years.
+  - Hard to get precise values for individual data points.
+
+c) Comment on the legibility of the original visualization. Are there aspects of the visualization that are cluttered or difficult to read?
+
+*Legibility of the Original Visualization:*
+  - The scatter plot is cluttered. 
+  - It is difficult to distinguish the individual data points. (Overlapping of the data points makes it challenging.)
+
+d) Propose and implement an alternative design. What visual tasks do you prioritize in the new design? Did you have to make any trade-offs? Did you make any changes specifically to improve legibility
+
+*Alternative Design:*
+I propose creating an interactive line graph using the Shiny framework in R. Adding interactivity by allowing users to select a specific year through the check boxes.
+  - The new implementation adds interactivity by allowing users to select specific years through check boxes. Users can explore the data by choosing one or more years of interest.
+  
+  - When many years are selected, the plot might become cluttered, impacting legibility.
+
+  - Trade-offs: This design does not include features like tool tips or zooming, which could provide more detailed information.
+
+  - The check box selection method may not be suitable for extremely large data sets or when more complex filtering options are required.
+
+*CODE:*
+```{r}
+
+library(shiny)
+library(ggplot2)
+
+ui <- fluidPage(
+  titlePanel("Coffee production comparison"),
+  
+  sidebarLayout(
+    sidebarPanel(
+      checkboxGroupInput("years", "Select Year(s):",
+                         choices = unique(coffee_rating$harvest_year),
+                         selected = unique(coffee_rating$harvest_year))
+    ),
+    
+    mainPanel(
+      plotOutput("coffee_plot")
+    )
+  )
+)
+
+server <- function(input, output) {
+  
+  filtered_data <- reactive({
+    selected_years <- input$years
+    coffee_rating[coffee_rating$harvest_year %in% selected_years, ]
+  })
+  
+  output$coffee_plot <- renderPlot({
+    filtered_df <- filtered_data()
+    
+    ggplot(filtered_df, aes(x = country_of_origin, y = number_of_bags, color = as.factor(harvest_year))) +
+      geom_point(size = 3) +
+      labs(
+        x = "Country of Origin",
+        y = "Number of Bags",
+        color = "Year"
+      ) +
+      theme_minimal() +
+      theme(axis.text.x = element_text(angle = 90, hjust = 1),
+            plot.title = element_text(hjust = 0.5))
+  })
+}
+
+shinyApp(ui, server)
+
+```
+
+**DISCUSSION:**
+
+**Question1: [Antibiotics Comparison]**
+
+```{r}
+antibiotic <- read.csv("https://uwmadison.box.com/shared/static/5jmd9pku62291ek20lioevsw1c588ahx.csv")
+```
+For each approach, describe,
+• One type of visual comparison for which the visualization is well-suited.
+• One type of visual comparison for which the visualization is poorly-suited.
+
+Make sure to explain your reasoning.
+
+*a) Approach1:*
+- Well suited for comparing trends of individual species over time.
+- Each subplot is dedicated to a specific species, observing how the abundance of the species is changing in response to different factors (antibiotic, antibiotic-free and post-antibiotic)
+
+-Poorly suited if the goal is to compare individual data points.
+-Line plots primarily focus on trends or patterns which makes it challenging to get precise values at a specific time frame. 
+-Cannot be used to compare the interaction between species.
+
+*b) Approach2*
+- Well suited for identifying patterns and differences between multiple variables. This approach here is used to visualize how species abundance varies across different species, time points and ind types(D,E,F) in one comprehensive view.
+
+-Poorly suited if the goal is to analyze trends of individual species over time. It is challenging to read precise values for specific analysis on individual species.
+
+*c) Approach3*
+- Well suited for observing trends or patterns. The visualization effectively portray how the abundance of species across different categories(D,E and F) changes over time.
+
+-Poorly suited if the goal is to analyze each species independently. This visualization groups data by the ind type and species into subplots and makes it challenging to read precise values at a specific point of time.
+
+d) Sketch code that could be used to make one of the three visualizations above.
+
+```{r, message=FALSE, warning=FALSE}
+library(ggplot2)
+
+#line plot with just the svalue vs time for all the 6 species
+line_plots <- ggplot(data = antibiotic, aes(x = time, y = svalue)) +
+  geom_line() +
+  labs(title = "Species Abundance Over Time",
+       x = "Time",
+       y = "Abundance (svalue)") +
+  facet_grid(species ~ ind, scales = "free_y") +
+  theme_minimal()
+
+#antibiotic treatments as points
+line_plots_with_points <- line_plots +
+  geom_point(data = antibiotic, aes(x = time, y = svalue, color = antibiotic), size = 1, alpha = 0.7)
+
+print(line_plots_with_points)
+
+```
+
+**Question2: [More Shiny Bugs]**
+
+a) Program (a). Goal: When the user inputs a number, the program reports whether or not that
+number is larger than 10.
+
+*Changes made to the following lines of code:*
+1) ifelse(input_num > 10, "Number is greater than 10", "Number is less than or equal to 10")
+
+  - A regular 'if' statement should be used to perform the conditional check.
+  - input_num is replaced by input$input_num.
+  
+*CODE:*  
+```{r}
+library(shiny)
+
+ui <- fluidPage(
+  numericInput("input_num", "Enter a number:", value = 5),
+  textOutput("output_text")
+)
+
+server <- function(input, output) {
+  output$output_text <- renderText({
+    if (input$input_num > 10) {
+      "Number is greater than 10"
+    } else {
+      "Number is less than or equal to 10"
+    }
+  })
+}
+#shinyApp(ui, server)
+```
+
+b) Program (b). Goal: When the user clicks a button labeled “Increment Counter”, then the text
+next to the button should increase by one.
+
+*Changes made to the following lines of code:*
+1) observe({
+counter <- counter + 1
+})
+2) output$counter_text <- renderPrint(counter)
+
+- replaced 'counter <- counter +1' with counter(). The original assignment redefines 'counter' as a regular variable instead of updating the reactive value.
+- used 'observeEvent' to react to the button click. This way when the button is clicked, the counter will be incremented and updated.
+
+*CODE:*
+```{r}
+library(shiny)
+
+ui <- fluidPage(
+  actionButton("increment", "Increment Counter"),
+  verbatimTextOutput("counter_text")
+)
+
+server <- function(input, output) {
+  counter <- reactiveVal(0)
+  
+  observeEvent(input$increment, {
+    counter(counter() + 1)
+  })
+  
+  output$counter_text <- renderPrint({
+    counter()
+  })
+}
+
+#shinyApp(ui, server)
+```
+
+
+c) Program (c). Goal: When the user selects a variable from the selection menu, we will show a scatter plot of mpg against the selected variable in the mtcars data set.
+
+*Changes made to the following lines of code:*
+1)cur_data <- mtcars[, c("mpg", input$plot_type)]
+output$plot <- renderPlot({
+ggplot(cur_data, aes(mpg, .data[[y_var]])) +
+geom_point()
+})
+
+- Changed the way 'input$plot_type' is being accessed.
+- Selected variable is stored into a separate variable 'y_var' to resolve the issue.
+
+*CODE:*
+```{r}
+library(shiny)
+library(ggplot2)
+
+ui <- fluidPage(
+  selectInput("plot_type", "Select plot type:", choices = c("cyl", "disp", "hp", "wt")),
+  plotOutput("plot")
+)
+
+server <- function(input, output) {
+  output$plot <- renderPlot({
+    y_var <- input$plot_type 
+    cur_data <- mtcars[, c("mpg", y_var)]  
+    
+    ggplot(cur_data, aes(mpg, .data[[y_var]])) +
+      geom_point()
+  })
+}
+
+#shinyApp(ui, server)
+
+```
+d) Program (d). Goal: When the user enters numbers x and y, the program will print f(x, y)^2 and f(x, y)^3. We wanted to implement this without computing f (x, y) twice, because this operation is time consuming.
+
+*Changes made to the following lines of code:*
+1)server <- function(input, output) {
+f_xy <- f(input$x, input$y)
+output$output1 <- renderText({
+paste("f(x, y) ˆ 2:", total ˆ 2)
+})
+output$output2 <- renderText({
+paste("f(x, y) ˆ 3:", total ˆ 3)
+})
+
+- created a reactive expression 'f_xy' that computes f(input$x, input$y) based on the current values of x and y.
+- In the renderText blocks for output1 and output2, I used f_xy() to retrieve the current value of f(x, y) and calculated its square and cube, respectively.
+
+*CODE:*
+```{r}
+library(shiny)
+
+ui <- fluidPage(
+  numericInput("x", "Enter x", value = 0),
+  numericInput("y", "Enter y", value = 0),
+  textOutput("output1"),
+  textOutput("output2")
+)
+
+f <- function(x, y) {
+  Sys.sleep(4)
+  sqrt(x^2 + y^2)
+}
+
+server <- function(input, output) {
+  f_xy <- reactive({
+    f(input$x, input$y)
+  })
+  
+  output$output1 <- renderText({
+    paste("f(x, y) ^ 2:", f_xy()^2)
+  })
+  
+  output$output2 <- renderText({
+    paste("f(x, y) ^ 3:", f_xy()^3)
+  })
+}
+
+#shinyApp(ui, server)
+
+```
+
+

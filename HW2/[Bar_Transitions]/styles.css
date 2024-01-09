@@ -1,0 +1,32 @@
+body {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+    padding: 0;
+}
+
+#container {
+    display: flex;
+    align-items: center;
+    margin-left: 20px; 
+}
+
+#updateButton {
+    margin-right: 20px; 
+}
+
+#chart-container {
+    display: flex;
+    flex-direction: column;
+}
+
+#updateButton {
+    padding: 10px 20px; 
+    border: 2px; 
+    border-color: black;
+    border-radius: 5px; 
+    cursor: pointer;
+}
+

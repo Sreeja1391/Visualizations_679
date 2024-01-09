@@ -1,0 +1,13 @@
+name: STAT679_HW2
+title: STAT679_HW2
+username: sreejakodati
+account: sreejakodati
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 10288420
+bundleId: 7842435
+url: https://sreejakodati.shinyapps.io/STAT679_HW2/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
+additionalFiles: 2b.png
